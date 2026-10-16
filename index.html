@@ -2,18 +2,22 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>True Up — Verified Marketplace</title>
-  <!-- Подключение Tailwind CSS -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Подключение React и Babel -->
+  <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Иконки Lucide -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { background-color: #0A0A0C; color: #ffffff; }
+    /* Скрытие полосы прокрутки для чистящего мобильного вида */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
 </head>
-<body class="bg-[#0A0A0C] text-white antialiased">
+<body class="antialiased selection:bg-blue-600 selection:text-white">
   <div id="root"></div>
 
   <script type="text/babel">
@@ -57,12 +61,13 @@
         category: 'Кроссовки',
         price: 28900,
         image: 'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?auto=format&fit=crop&q=80&w=800',
-        description: 'Технология амортизации Boost и верхом Primeknit.',
+        description: 'Технология амортизации Boost и верх из материала Primeknit.',
         sizes: ['40 EU', '41 EU', '42 EU', '43 EU']
       }
     ];
 
     function App() {
+      // Состояния данных
       const [products, setProducts] = useState(() => {
         const saved = localStorage.getItem('trueup_products');
         return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
@@ -72,24 +77,30 @@
       const [searchQuery, setSearchQuery] = useState('');
       const [cart, setCart] = useState([]);
       const [isCartOpen, setIsCartOpen] = useState(false);
+      const [checkoutStep, setCheckoutStep] = useState('cart'); // 'cart', 'form', 'success'
+      const [customerData, setCustomerData] = useState({ name: '', phone: '', address: '' });
+
       const [selectedProduct, setSelectedProduct] = useState(null);
       const [selectedSize, setSelectedSize] = useState('');
 
+      // Состояния Админки
       const [isAdmin, setIsAdmin] = useState(false);
       const [showAdminModal, setShowAdminModal] = useState(false);
       const [adminPassword, setAdminPassword] = useState('');
       const [adminError, setAdminError] = useState('');
+      const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
       const [showAddProductModal, setShowAddProductModal] = useState(false);
       const [newProduct, setNewProduct] = useState({
         title: '', brand: '', category: 'Кроссовки', price: '', image: '', description: '', sizes: '40, 41, 42, 43'
       });
 
+      // Чат поддержки
       const [isChatOpen, setIsChatOpen] = useState(false);
-      const [chatMessages, setChatMessages] = useState(() => {
+      const [messages, setMessages] = useState(() => {
         const saved = localStorage.getItem('trueup_chat');
         return saved ? JSON.parse(saved) : [
-          { id: 1, sender: 'support', text: 'Здравствуйте! Я администратор True Up. Чем могу помочь?', time: '12:00' }
+          { id: 1, chatId: 'Чат #1', sender: 'support', text: 'Здравствуйте! Чат поддержки True Up на связи. Чем могу помочь?', time: '12:00' }
         ];
       });
       const [inputMessage, setInputMessage] = useState('');
@@ -100,16 +111,11 @@
       }, [products]);
 
       useEffect(() => {
-        localStorage.setItem('trueup_chat', JSON.stringify(chatMessages));
-      }, [chatMessages]);
-
-      useEffect(() => {
-        if (window.lucide) {
-          window.lucide.createIcons();
-        }
-      });
+        localStorage.setItem('trueup_chat', JSON.stringify(messages));
+      }, [messages]);
 
       const categories = ['Все', 'Кроссовки', 'Одежда', 'Аксессуары'];
+      
       const filteredProducts = products.filter(p => {
         const matchesCategory = selectedCategory === 'Все' || p.category === selectedCategory;
         const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -117,6 +123,7 @@
         return matchesCategory && matchesSearch;
       });
 
+      // Вход Админа
       const handleAdminLogin = (e) => {
         e.preventDefault();
         if (adminPassword === 'trueup2026') {
@@ -125,10 +132,11 @@
           setAdminPassword('');
           setAdminError('');
         } else {
-          setAdminError('Неверный пароль администратора!');
+          setAdminError('Неверный пароль!');
         }
       };
 
+      // Добавление товара
       const handleAddProduct = (e) => {
         e.preventDefault();
         if (!newProduct.title || !newProduct.price || !newProduct.image) return;
@@ -140,7 +148,7 @@
           category: newProduct.category,
           price: Number(newProduct.price),
           image: newProduct.image,
-          description: newProduct.description || 'Оригинал True Up Verified.',
+          description: newProduct.description || 'Оригинальная вещь True Up Verified.',
           sizes: newProduct.sizes.split(',').map(s => s.trim())
         };
 
@@ -150,17 +158,45 @@
       };
 
       const handleDeleteProduct = (id) => {
-        if (window.confirm('Удалить этот товар?')) {
+        if (window.confirm('Удалить этот товар из каталога?')) {
           setProducts(products.filter(p => p.id !== id));
         }
       };
 
+      // Работа с корзиной
+      const addToCart = (product, size) => {
+        if (!size) {
+          alert('Пожалуйста, выберите размер!');
+          return;
+        }
+        setCart(prev => [...prev, { ...product, cartId: Date.now(), selectedSize: size }]);
+        setSelectedProduct(null);
+        setIsCartOpen(true);
+        setCheckoutStep('cart');
+      };
+
+      const removeFromCart = (cartId) => {
+        setCart(cart.filter(item => item.cartId !== cartId));
+      };
+
+      const handleOrderSubmit = (e) => {
+        e.preventDefault();
+        if (!customerData.name || !customerData.phone || !customerData.address) {
+          alert('Пожалуйста, заполните все данные для доставки!');
+          return;
+        }
+        setCheckoutStep('success');
+        setCart([]);
+      };
+
+      // Чат отправка
       const handleSendMessage = (e) => {
         e.preventDefault();
         if (!inputMessage.trim()) return;
 
-        setChatMessages(prev => [...prev, {
+        setMessages(prev => [...prev, {
           id: Date.now(),
+          chatId: 'Чат #1',
           sender: 'user',
           text: inputMessage,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -172,8 +208,9 @@
         e.preventDefault();
         if (!adminReplyText.trim()) return;
 
-        setChatMessages(prev => [...prev, {
+        setMessages(prev => [...prev, {
           id: Date.now(),
+          chatId: 'Чат #1',
           sender: 'support',
           text: adminReplyText,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -181,235 +218,505 @@
         setAdminReplyText('');
       };
 
-      const addToCart = (product, size) => {
-        if (!size) return alert('Выберите размер!');
-        setCart(prev => [...prev, { ...product, cartId: Date.now(), selectedSize: size }]);
-        setSelectedProduct(null);
-        setIsCartOpen(true);
-      };
-
       const totalPrice = cart.reduce((sum, item) => sum + item.price, 0);
 
       return (
-        <div className="min-h-screen bg-[#0A0A0C] text-white">
-          {/* Хедер */}
-          <header className="sticky top-0 z-40 bg-[#0A0A0C]/90 backdrop-blur-md border-b border-white/10">
-            <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-600 px-3 py-1.5 rounded-xl font-extrabold text-xl text-black shadow-lg shadow-blue-600/30">
-                  TU
+        <div className="min-h-screen flex flex-col justify-between">
+          <div>
+            {/* Навигационная панель */}
+            <header className="sticky top-0 z-40 bg-[#0A0A0C]/95 backdrop-blur-md border-b border-white/10">
+              <div className="max-w-7xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
+                
+                {/* Логотип */}
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="bg-blue-600 px-2.5 py-1 rounded-xl font-extrabold text-lg sm:text-xl text-black shadow-lg shadow-blue-600/30">
+                    TU
+                  </div>
+                  <div>
+                    <span className="text-lg sm:text-2xl font-black tracking-widest text-white block leading-none">TRUE UP</span>
+                    <span className="text-[8px] sm:text-[10px] text-blue-400 font-bold tracking-wider">VERIFIED MARKETPLACE</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-2xl font-black tracking-widest text-white">TRUE UP</span>
-                  <span className="block text-[10px] text-blue-400 font-semibold tracking-wider">VERIFIED MARKETPLACE</span>
+
+                {/* Поиск */}
+                <div className="flex-1 max-w-xs sm:max-w-md mx-2 hidden sm:block">
+                  <input 
+                    type="text"
+                    placeholder="Поиск кроссовок, одежды..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-full text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Действия Хедера */}
+                <div className="flex items-center gap-1.5 sm:gap-3">
+                  {isAdmin ? (
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        onClick={() => setShowAdminDashboard(true)} 
+                        className="px-2.5 py-1.5 bg-blue-600/20 border border-blue-500 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl text-xs font-bold transition"
+                      >
+                        ⚙️ Панель
+                      </button>
+                      <button 
+                        onClick={() => setShowAddProductModal(true)} 
+                        className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition"
+                      >
+                        + Вещь
+                      </button>
+                      <button 
+                        onClick={() => { setIsAdmin(false); setShowAdminDashboard(false); }} 
+                        className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-xl text-xs"
+                        title="Выйти"
+                      >
+                        🚪
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => setShowAdminModal(true)} 
+                      className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-300 transition flex items-center gap-1"
+                    >
+                      <span>🔒</span> <span className="hidden sm:inline">Админ</span>
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => setIsChatOpen(!isChatOpen)} 
+                    className="p-2 bg-white/5 border border-white/10 rounded-xl text-blue-400 hover:bg-white/10 transition relative"
+                    title="Чат поддержки"
+                  >
+                    💬
+                  </button>
+
+                  <button 
+                    onClick={() => { setIsCartOpen(true); setCheckoutStep('cart'); }} 
+                    className="relative p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition font-bold"
+                  >
+                    🛒
+                    {cart.length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 bg-white text-black font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#0A0A0C]">
+                        {cart.length}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
 
-              <div className="flex-1 max-w-md hidden md:block">
+              {/* Мобильный Поиск */}
+              <div className="px-4 pb-3 sm:hidden">
                 <input 
                   type="text"
-                  placeholder="Поиск кроссовок, одежды, брендов..."
+                  placeholder="Поиск кроссовок, одежды..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none"
                 />
               </div>
+            </header>
 
-              <div className="flex items-center gap-3">
-                {isAdmin ? (
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setShowAddProductModal(true)} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold">
-                      + Добавить вещь
-                    </button>
-                    <button onClick={() => setIsAdmin(false)} className="px-3 py-2 bg-red-500/20 text-red-400 rounded-xl text-xs font-medium">
-                      Выйти
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => setShowAdminModal(true)} className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-gray-300">
-                    🔒 Вход Админа
+            {/* Баннер */}
+            <div className="border-b border-white/5 bg-gradient-to-b from-blue-950/20 to-[#0A0A0C] py-8 sm:py-12 text-center px-4">
+              <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight">
+                НАЙДИ СВОЙ <span className="text-blue-500">TRUE</span> СТИЛЬ
+              </h1>
+              <p className="text-gray-400 text-xs sm:text-sm mt-2 max-w-xl mx-auto">
+                Платформа оригинальных лимитированных кроссовок, одежды и аксессуаров. Каждая вещь проходит строгую проверку экспертов Poizon Standard.
+              </p>
+            </div>
+
+            {/* Главный Контент */}
+            <main className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
+              {/* Фильтры категорий */}
+              <div className="flex gap-2 mb-6 sm:mb-8 overflow-x-auto no-scrollbar pb-1">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
+                      selectedCategory === cat 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' 
+                        : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+                    }`}
+                  >
+                    {cat}
                   </button>
-                )}
-
-                <button onClick={() => setIsChatOpen(!isChatOpen)} className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-blue-400">
-                  💬
-                </button>
-
-                <button onClick={() => setIsCartOpen(true)} className="relative p-2.5 bg-blue-600 text-white rounded-xl">
-                  🛒
-                  {cart.length > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-white text-black font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
-                      {cart.length}
-                    </span>
-                  )}
-                </button>
+                ))}
               </div>
-            </div>
-          </header>
 
-          {/* Баннер */}
-          <div className="border-b border-white/5 bg-gradient-to-b from-blue-950/30 to-[#0A0A0C] py-12 text-center">
-            <h1 className="text-4xl font-black uppercase tracking-tight">НАЙДИ СВОЙ <span className="text-blue-500">TRUE</span> СТИЛЬ</h1>
-            <p className="text-gray-400 text-sm mt-2">Платформа оригинальных лимитированных кроссовок и одежды с гарантией аутентичности</p>
-          </div>
-
-          {/* Каталог */}
-          <main className="max-w-7xl mx-auto px-4 py-8">
-            <div className="flex gap-2 mb-8 overflow-x-auto">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-5 py-2 rounded-xl text-sm font-bold transition ${
-                    selectedCategory === cat ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-400 border border-white/10'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {filteredProducts.map(p => (
-                <div key={p.id} className="bg-[#121216] border border-white/10 rounded-2xl overflow-hidden flex flex-col justify-between">
-                  <div>
-                    <div className="relative aspect-square">
-                      <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
-                      {isAdmin && (
-                        <button onClick={() => handleDeleteProduct(p.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-lg text-xs">
-                          Удалить
-                        </button>
-                      )}
+              {/* Сетка товаров */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                {filteredProducts.map(p => (
+                  <div key={p.id} className="bg-[#121216] border border-white/10 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-blue-500/50 transition">
+                    <div>
+                      <div className="relative aspect-square bg-white/5 overflow-hidden">
+                        <img src={p.image} alt={p.title} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
+                        {isAdmin && (
+                          <button 
+                            onClick={() => handleDeleteProduct(p.id)} 
+                            className="absolute top-2 right-2 bg-red-600/90 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs font-bold transition shadow-lg"
+                            title="Удалить товар"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      <div className="p-3 sm:p-4">
+                        <span className="text-[10px] sm:text-xs text-blue-400 font-bold uppercase tracking-wider">{p.brand}</span>
+                        <h3 className="font-bold text-xs sm:text-sm text-white mt-0.5 line-clamp-1">{p.title}</h3>
+                        <p className="text-[10px] sm:text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">{p.description}</p>
+                      </div>
                     </div>
-                    <div className="p-4">
-                      <span className="text-xs text-blue-400 font-bold uppercase">{p.brand}</span>
-                      <h3 className="font-bold text-sm text-white mt-1">{p.title}</h3>
-                      <p className="text-xs text-gray-400 mt-1 line-clamp-2">{p.description}</p>
-                    </div>
-                  </div>
 
-                  <div className="p-4 pt-0 flex items-center justify-between border-t border-white/5 mt-2">
-                    <span className="text-lg font-black text-white">{p.price.toLocaleString('ru-RU')} ₽</span>
-                    <button 
-                      onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes[0] || ''); }}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl"
-                    >
-                      Купить
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </main>
-
-          {/* Модалка товара */}
-          {selectedProduct && (
-            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-              <div className="bg-[#121216] border border-white/10 rounded-3xl max-w-lg w-full p-6 relative">
-                <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-gray-400">✕</button>
-                <div className="flex gap-4">
-                  <img src={selectedProduct.image} className="w-32 h-32 object-cover rounded-xl" />
-                  <div>
-                    <h3 className="font-bold text-lg">{selectedProduct.title}</h3>
-                    <div className="text-xl font-black text-blue-500 my-2">{selectedProduct.price.toLocaleString('ru-RU')} ₽</div>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {selectedProduct.sizes.map(s => (
-                        <button 
-                          key={s} 
-                          onClick={() => setSelectedSize(s)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border ${selectedSize === s ? 'bg-blue-600 border-blue-500' : 'bg-white/5 border-white/10'}`}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                    <button onClick={() => addToCart(selectedProduct, selectedSize)} className="w-full py-2.5 bg-blue-600 font-bold rounded-xl text-sm">
-                      В корзину
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Чат */}
-          {isChatOpen && (
-            <div className="fixed bottom-4 right-4 z-50 w-80 bg-[#121216] border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-96">
-              <div className="p-3 bg-blue-600 text-white font-bold text-sm flex justify-between">
-                <span>Поддержка True Up</span>
-                <button onClick={() => setIsChatOpen(false)}>✕</button>
-              </div>
-              <div className="flex-1 p-3 overflow-y-auto space-y-2">
-                {chatMessages.map(m => (
-                  <div key={m.id} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                    <div className={`px-3 py-1.5 rounded-xl text-xs ${m.sender === 'user' ? 'bg-blue-600' : 'bg-white/10'}`}>
-                      {m.text}
+                    <div className="p-3 sm:p-4 pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-white/5 mt-2">
+                      <span className="text-sm sm:text-lg font-black text-white">{p.price.toLocaleString('ru-RU')} ₽</span>
+                      <button 
+                        onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes[0] || ''); }}
+                        className="w-full sm:w-auto px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition text-center"
+                      >
+                        Купить
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-              {isAdmin && (
-                <form onSubmit={handleAdminReply} className="p-2 border-t border-white/10 bg-blue-950/30 flex gap-1">
-                  <input 
-                    type="text" 
-                    placeholder="Ответ админа..." 
-                    value={adminReplyText} 
-                    onChange={e => setAdminReplyText(e.target.value)} 
-                    className="flex-1 px-2 py-1 bg-white/5 border border-white/10 rounded text-xs"
-                  />
-                  <button type="submit" className="px-2 py-1 bg-blue-600 text-xs rounded font-bold">Ответить</button>
-                </form>
-              )}
-              <form onSubmit={handleSendMessage} className="p-2 border-t border-white/10 flex gap-1">
-                <input 
-                  type="text" 
-                  placeholder="Задать вопрос..." 
-                  value={inputMessage} 
-                  onChange={e => setInputMessage(e.target.value)} 
-                  className="flex-1 px-2 py-1 bg-white/5 border border-white/10 rounded text-xs"
-                />
-                <button type="submit" className="px-2 py-1 bg-blue-600 text-xs rounded font-bold">Отправить</button>
-              </form>
+            </main>
+          </div>
+
+          {/* Футер */}
+          <footer className="border-t border-white/10 py-6 text-center text-xs text-gray-500 mt-12">
+            © 2026 TRUE UP Verified Marketplace. Все права защищены.
+          </footer>
+
+          {/* ================= МОДАЛЬНЫЕ ОКНА ================= */}
+
+          {/* 1. Модалка выбора товара */}
+          {selectedProduct && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-[#121216] border border-white/10 rounded-3xl max-w-md w-full p-5 sm:p-6 relative my-auto">
+                <button 
+                  onClick={() => setSelectedProduct(null)} 
+                  className="absolute top-4 right-4 bg-white/5 hover:bg-white/10 text-gray-300 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                >
+                  ✕
+                </button>
+                
+                <img src={selectedProduct.image} className="w-full h-48 sm:h-56 object-cover rounded-2xl mb-4 bg-white/5" />
+                <span className="text-xs text-blue-400 font-bold uppercase">{selectedProduct.brand}</span>
+                <h3 className="font-bold text-base sm:text-lg text-white">{selectedProduct.title}</h3>
+                <p className="text-xs text-gray-400 mt-1">{selectedProduct.description}</p>
+
+                <div className="my-4">
+                  <label className="text-xs font-bold text-gray-300 block mb-2">Выберите размер:</label>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedProduct.sizes.map(s => (
+                      <button 
+                        key={s} 
+                        onClick={() => setSelectedSize(s)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                          selectedSize === s 
+                            ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30' 
+                            : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                  <div>
+                    <span className="text-[10px] text-gray-400 block">Итоговая цена</span>
+                    <span className="text-xl font-black text-blue-400">{selectedProduct.price.toLocaleString('ru-RU')} ₽</span>
+                  </div>
+                  <button 
+                    onClick={() => addToCart(selectedProduct, selectedSize)} 
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 font-bold rounded-xl text-xs sm:text-sm text-white transition shadow-lg shadow-blue-600/30"
+                  >
+                    В корзину
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Модалка входа админа */}
+          {/* 2. Модалка Корзины и Оформления */}
+          {isCartOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-[#121216] border border-white/10 rounded-3xl max-w-lg w-full p-5 sm:p-6 relative my-auto max-h-[90vh] flex flex-col">
+                <button 
+                  onClick={() => setIsCartOpen(false)} 
+                  className="absolute top-4 right-4 bg-white/5 hover:bg-white/10 text-gray-300 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                >
+                  ✕
+                </button>
+
+                <h3 className="font-bold text-lg text-white mb-4 flex items-center gap-2">
+                  <span>🛒</span> Корзина товаров
+                </h3>
+
+                {checkoutStep === 'cart' && (
+                  <div className="flex-1 overflow-y-auto pr-1">
+                    {cart.length === 0 ? (
+                      <div className="text-center py-12 text-gray-400 text-sm">
+                        Ваша корзина пока пуста 👟
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {cart.map((item) => (
+                          <div key={item.cartId} className="flex items-center justify-between bg-white/5 p-3 rounded-2xl border border-white/5">
+                            <div className="flex items-center gap-3">
+                              <img src={item.image} className="w-14 h-14 object-cover rounded-xl bg-black" />
+                              <div>
+                                <h4 className="font-bold text-xs sm:text-sm text-white">{item.title}</h4>
+                                <div className="text-[11px] text-gray-400">Размер: <span className="text-blue-400 font-bold">{item.selectedSize}</span></div>
+                                <div className="text-xs font-black text-white mt-1">{item.price.toLocaleString('ru-RU')} ₽</div>
+                              </div>
+                            </div>
+                            <button onClick={() => removeFromCart(item.cartId)} className="text-red-400 hover:text-red-300 p-2 text-xs font-bold">
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {cart.length > 0 && (
+                      <div className="mt-6 pt-4 border-t border-white/10">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-sm text-gray-400">Итого к оплате:</span>
+                          <span className="text-xl font-black text-blue-400">{totalPrice.toLocaleString('ru-RU')} ₽</span>
+                        </div>
+                        <button 
+                          onClick={() => setCheckoutStep('form')} 
+                          className="w-full py-3 bg-blue-600 hover:bg-blue-500 font-bold rounded-xl text-sm text-white transition shadow-lg shadow-blue-600/30"
+                        >
+                          Перейти к оформлению
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {checkoutStep === 'form' && (
+                  <form onSubmit={handleOrderSubmit} className="space-y-3 text-xs">
+                    <div>
+                      <label className="block text-gray-400 mb-1">ФИО получателя</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="Иванов Иван Иванович" 
+                        value={customerData.name} 
+                        onChange={e => setCustomerData({...customerData, name: e.target.value})} 
+                        className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-blue-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 mb-1">Номер телефона</label>
+                      <input 
+                        type="tel" 
+                        required 
+                        placeholder="+7 (999) 000-00-00" 
+                        value={customerData.phone} 
+                        onChange={e => setCustomerData({...customerData, phone: e.target.value})} 
+                        className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-blue-500" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 mb-1">Адрес доставки / Пункт выдачи</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="г. Москва, ул. Тверская 10" 
+                        value={customerData.address} 
+                        onChange={e => setCustomerData({...customerData, address: e.target.value})} 
+                        className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-blue-500" 
+                      />
+                    </div>
+
+                    <div className="pt-4 flex gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setCheckoutStep('cart')} 
+                        className="w-1/3 py-3 bg-white/5 hover:bg-white/10 border border-white/10 font-bold rounded-xl text-xs text-gray-300"
+                      >
+                        Назад
+                      </button>
+                      <button 
+                        type="submit" 
+                        className="w-2/3 py-3 bg-blue-600 hover:bg-blue-500 font-bold rounded-xl text-xs text-white transition shadow-lg shadow-blue-600/30"
+                      >
+                        Отправить заказ
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {checkoutStep === 'success' && (
+                  <div className="text-center py-8 space-y-3">
+                    <div className="text-4xl">🎉</div>
+                    <h4 className="font-bold text-lg text-white">Заказ принят, ожидайте!</h4>
+                    <p className="text-xs text-gray-400">Наш менеджер свяжется с вами по указанному телефону для подтверждения заказа.</p>
+                    <button 
+                      onClick={() => setIsCartOpen(false)} 
+                      className="mt-4 px-6 py-2.5 bg-blue-600 font-bold rounded-xl text-xs text-white"
+                    >
+                      Отлично
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Модалка Входа Админа (без отображения пароля) */}
           {showAdminModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-              <div className="bg-[#121216] border border-white/10 rounded-2xl p-6 max-w-xs w-full text-center">
-                <h3 className="font-bold text-lg mb-2">Вход Админа</h3>
-                <p className="text-xs text-gray-400 mb-4">Пароль по умолчанию: <span className="text-blue-400 font-mono">trueup2026</span></p>
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-[#121216] border border-white/10 rounded-3xl p-6 max-w-xs w-full text-center relative">
+                <button 
+                  onClick={() => setShowAdminModal(false)} 
+                  className="absolute top-3 right-3 text-gray-400 hover:text-white"
+                >
+                  ✕
+                </button>
+                <h3 className="font-bold text-lg text-white mb-4">Вход Админа</h3>
                 <form onSubmit={handleAdminLogin} className="space-y-3">
                   <input 
                     type="password" 
                     placeholder="Пароль" 
                     value={adminPassword} 
                     onChange={e => setAdminPassword(e.target.value)}
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm"
+                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white text-center focus:outline-none focus:border-blue-500"
                   />
                   {adminError && <p className="text-xs text-red-400">{adminError}</p>}
-                  <button type="submit" className="w-full py-2 bg-blue-600 font-bold rounded-xl text-sm">Войти</button>
+                  <button type="submit" className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 font-bold rounded-xl text-xs text-white transition">
+                    Войти
+                  </button>
                 </form>
               </div>
             </div>
           )}
 
-          {/* Модалка добавления товара */}
+          {/* 4. Центр Управления Админа */}
+          {showAdminDashboard && isAdmin && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-[#121216] border border-white/10 rounded-3xl max-w-xl w-full p-5 sm:p-6 relative my-auto max-h-[90vh] overflow-y-auto">
+                <button 
+                  onClick={() => setShowAdminDashboard(false)} 
+                  className="absolute top-4 right-4 bg-white/5 text-gray-300 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                >
+                  ✕
+                </button>
+
+                <h3 className="font-bold text-lg text-white mb-4 flex items-center gap-2">
+                  <span>⚙️</span> Панель Администратора
+                </h3>
+
+                <div className="space-y-4 text-xs">
+                  <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <h4 className="font-bold text-blue-400 mb-2">💬 Диалоги поддержки клиентов</h4>
+                    <p className="text-gray-400 mb-3">Сообщения пользователей в чате поддержки:</p>
+                    <div className="bg-black/50 p-3 rounded-xl max-h-40 overflow-y-auto space-y-2 border border-white/5">
+                      {messages.map(m => (
+                        <div key={m.id} className="text-[11px]">
+                          <span className="font-bold text-blue-400">{m.chatId} [{m.sender === 'user' ? 'Пользователь' : 'Админ'}]:</span> <span className="text-gray-200">{m.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+                    <div>
+                      <h4 className="font-bold text-white">Управление каталогом</h4>
+                      <p className="text-gray-400 text-[11px]">Всего товаров на сайте: {products.length}</p>
+                    </div>
+                    <button 
+                      onClick={() => { setShowAdminDashboard(false); setShowAddProductModal(true); }}
+                      className="px-3 py-2 bg-blue-600 font-bold text-white rounded-xl"
+                    >
+                      + Добавить товар
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. Модалка Добавления Товара */}
           {showAddProductModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-              <div className="bg-[#121216] border border-white/10 rounded-2xl p-6 max-w-md w-full relative max-h-[90vh] overflow-y-auto">
-                <button onClick={() => setShowAddProductModal(false)} className="absolute top-4 right-4 text-gray-400">✕</button>
-                <h3 className="font-bold text-lg mb-4">Добавить новую вещь</h3>
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-[#121216] border border-white/10 rounded-3xl p-5 sm:p-6 max-w-md w-full relative my-auto max-h-[90vh] overflow-y-auto">
+                <button 
+                  onClick={() => setShowAddProductModal(false)} 
+                  className="absolute top-4 right-4 bg-white/5 text-gray-300 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                >
+                  ✕
+                </button>
+
+                <h3 className="font-bold text-lg text-white mb-4">Добавить новую вещь</h3>
                 <form onSubmit={handleAddProduct} className="space-y-3 text-xs">
-                  <input type="text" required placeholder="Название товара" value={newProduct.title} onChange={e => setNewProduct({...newProduct, title: e.target.value})} className="w-full p-2.5 bg-white/5 border border-white/10 rounded-xl" />
-                  <input type="text" placeholder="Бренд" value={newProduct.brand} onChange={e => setNewProduct({...newProduct, brand: e.target.value})} className="w-full p-2.5 bg-white/5 border border-white/10 rounded-xl" />
-                  <input type="number" required placeholder="Цена (₽)" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="w-full p-2.5 bg-white/5 border border-white/10 rounded-xl" />
-                  <input type="url" required placeholder="Ссылка на фото (URL)" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="w-full p-2.5 bg-white/5 border border-white/10 rounded-xl" />
-                  <input type="text" placeholder="Размеры через запятую" value={newProduct.sizes} onChange={e => setNewProduct({...newProduct, sizes: e.target.value})} className="w-full p-2.5 bg-white/5 border border-white/10 rounded-xl" />
-                  <textarea placeholder="Описание" value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="w-full p-2.5 bg-white/5 border border-white/10 rounded-xl resize-none" />
-                  <button type="submit" className="w-full py-3 bg-blue-600 font-bold rounded-xl text-sm">Опубликовать</button>
+                  <input type="text" required placeholder="Название товара" value={newProduct.title} onChange={e => setNewProduct({...newProduct, title: e.target.value})} className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500" />
+                  <input type="text" placeholder="Бренд" value={newProduct.brand} onChange={e => setNewProduct({...newProduct, brand: e.target.value})} className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500" />
+                  <input type="number" required placeholder="Цена (₽)" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500" />
+                  <input type="url" required placeholder="Ссылка на фото (URL)" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500" />
+                  <input type="text" placeholder="Размеры через запятую" value={newProduct.sizes} onChange={e => setNewProduct({...newProduct, sizes: e.target.value})} className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500" />
+                  <textarea placeholder="Описание" value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white resize-none focus:outline-none focus:border-blue-500" />
+                  <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 font-bold rounded-xl text-sm text-white transition shadow-lg shadow-blue-600/30">
+                    Опубликовать
+                  </button>
                 </form>
               </div>
+            </div>
+          )}
+
+          {/* 6. Чат Поддержки */}
+          {isChatOpen && (
+            <div className="fixed bottom-4 right-4 z-50 w-80 sm:w-96 bg-[#121216] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-96">
+              <div className="p-3 bg-blue-600 text-white font-bold text-xs sm:text-sm flex justify-between items-center">
+                <span className="flex items-center gap-1.5">💬 Чат поддержки True Up</span>
+                <button onClick={() => setIsChatOpen(false)} className="text-white text-base font-bold">✕</button>
+              </div>
+
+              <div className="flex-1 p-3 overflow-y-auto space-y-2 text-xs">
+                {messages.map(m => (
+                  <div key={m.id} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className={`px-3 py-2 rounded-2xl max-w-[85%] ${m.sender === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white/10 text-gray-200 rounded-bl-none'}`}>
+                      {m.text}
+                    </div>
+                    <span className="text-[9px] text-gray-500 mt-0.5 px-1">{m.time}</span>
+                  </div>
+                ))}
+              </div>
+
+              {isAdmin && (
+                <form onSubmit={handleAdminReply} className="p-2 border-t border-white/10 bg-blue-950/40 flex gap-1">
+                  <input 
+                    type="text" 
+                    placeholder="Ответ Админа..." 
+                    value={adminReplyText} 
+                    onChange={e => setAdminReplyText(e.target.value)} 
+                    className="flex-1 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none"
+                  />
+                  <button type="submit" className="px-3 py-1.5 bg-blue-600 font-bold text-xs rounded-xl text-white">
+                    Ответ
+                  </button>
+                </form>
+              )}
+
+              <form onSubmit={handleSendMessage} className="p-2 border-t border-white/10 flex gap-1">
+                <input 
+                  type="text" 
+                  placeholder="Задать вопрос..." 
+                  value={inputMessage} 
+                  onChange={e => setInputMessage(e.target.value)} 
+                  className="flex-1 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none"
+                />
+                <button type="submit" className="px-3 py-1.5 bg-blue-600 font-bold text-xs rounded-xl text-white">
+                  Отправить
+                </button>
+              </form>
             </div>
           )}
         </div>
